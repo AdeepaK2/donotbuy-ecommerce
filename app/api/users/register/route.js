@@ -1,28 +1,44 @@
-import { PrismaClient } from '@prisma/client';
-
-const prisma = new PrismaClient();
+import prisma from '@/lib/prisma'; // Ensure prisma is correctly set up
+import bcrypt from 'bcryptjs';
 
 export async function POST(request) {
     try {
-        const body = await request.json();
-        const { email, password, name, country, dateOfBirth } = body;
+        const { name, email, password, dateOfBirth, country, address, postCode, city } = await request.json();
 
-        if (!email || !password || !name || !country || !dateOfBirth) {
-            return new Response(JSON.stringify({ error: 'All fields are required' }), { status: 400 });
+        // Validate required fields
+        if (!name || !email || !password || !dateOfBirth || !country) {
+            return new Response(
+                JSON.stringify({ error: 'Missing required fields: name, email, password, dateOfBirth, and country are mandatory.' }),
+                { status: 400 }
+            );
         }
 
-        const newUser = await prisma.user.create({
+        // Hash the password
+        const hashedPassword = await bcrypt.hash(password, 10);
+
+        // Create the user
+        const user = await prisma.user.create({
             data: {
-                email,
-                password, // In production, hash this password using bcrypt
                 name,
+                email,
+                password: hashedPassword,
+                dateOfBirth: new Date(dateOfBirth), // Ensure valid DateTime format
                 country,
-                dateOfBirth: new Date(dateOfBirth),
+                address,  // Optional
+                postCode, // Optional
+                city,     // Optional
             },
         });
 
-        return new Response(JSON.stringify(newUser), { status: 201 });
+        return new Response(
+            JSON.stringify({ message: 'User created successfully', user }),
+            { status: 201 }
+        );
     } catch (error) {
-        return new Response(JSON.stringify({ error: error.message }), { status: 400 });
+        console.error(error);
+        return new Response(
+            JSON.stringify({ error: 'Internal Server Error', details: error.message }),
+            { status: 500 }
+        );
     }
 }
