@@ -1,26 +1,50 @@
-import { PrismaClient } from '@prisma/client';
-
-const prisma = new PrismaClient();
+import { authOptions } from "@/app/api/auth/[...nextauth]/route";
+import prisma from "@/lib/prisma";
+import bcrypt from "bcryptjs";
+import { NextResponse } from "next/server";
 
 export async function POST(request) {
     try {
-        const body = await request.json();
-        const { email, password } = body;
+        const { email, password } = await request.json();
 
         if (!email || !password) {
-            return new Response(JSON.stringify({ error: 'Email and password are required' }), { status: 400 });
+            return NextResponse.json(
+                { error: "Email and password are required" },
+                { status: 400 }
+            );
         }
 
+        // Find user in the database
         const user = await prisma.user.findUnique({
             where: { email },
         });
 
-        if (!user || user.password !== password) { // Use hashed password comparison in production
-            return new Response(JSON.stringify({ error: 'Invalid credentials' }), { status: 401 });
+        if (!user) {
+            return NextResponse.json(
+                { error: "Invalid credentials" },
+                { status: 401 }
+            );
         }
 
-        return new Response(JSON.stringify({ message: 'Login successful', user }), { status: 200 });
+        // Validate password
+        const isValidPassword = await bcrypt.compare(password, user.password);
+        if (!isValidPassword) {
+            return NextResponse.json(
+                { error: "Invalid credentials" },
+                { status: 401 }
+            );
+        }
+
+        // Return user info (you might want to create a session instead)
+        return NextResponse.json({
+            message: "Login successful",
+            user: { id: user.id, email: user.email, name: user.name },
+        });
     } catch (error) {
-        return new Response(JSON.stringify({ error: error.message }), { status: 400 });
+        console.error("Error logging in:", error);
+        return NextResponse.json(
+            { error: "Internal Server Error" },
+            { status: 500 }
+        );
     }
 }
